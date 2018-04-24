@@ -8,6 +8,15 @@
 #include <tss/platform.h>
 #include <tss/tspi.h>
 
+//常量
+#define IA_TPM_NOT_TSS_ERROR            -1
+#define IA_TPM_PLATFROM_KEY_PATH        "./PlatformKey.enc"
+
+#define TPMSEAL_HDR_STRING              "-----BEGIN TSS-----\n"
+#define TPMSEAL_FTR_STRING              "-----END TSS-----\n"
+#define TPMSEAL_TSS_STRING              "-----SEAL KEY-----\n"
+#define TPMSEAL_EVP_STRING              "-----PLATFROM KEY-----\n"
+
 //变量
 
 //函数
@@ -60,6 +69,12 @@ int ia_tpm_creat_key(
     TSS_FLAG        initFlags,
     TSS_HKEY        &hParentKey,
     TSS_HKEY        &hKey
+);
+
+int ia_tpm_seal_platform_key(
+    TSS_HCONTEXT    &hContext,
+    UINT32          PlatformKeySize,
+    BYTE            *PlatformKey
 );
 
 

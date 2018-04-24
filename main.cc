@@ -7,6 +7,8 @@
 
 BYTE source[12] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c};
 
+BYTE testData[] = "1234567";
+
 int main(int argc, char** argv)
 {
     TSS_HCONTEXT    hContext;
@@ -18,9 +20,16 @@ int main(int argc, char** argv)
     result = ia_tpm_init(hContext, hTpm);
     if (result != TSS_SUCCESS)
     {
-        LogBug("tpm init",result);
+        LogBug("[Main]tpm init",result);
         return -1;
     }
+    result = ia_tpm_seal_platform_key(hContext, 7, testData);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("[Main]tpm seal platform key", result);
+        return -1;
+    }
+    /*
     result = ia_tpm_get_srk(hContext, hSRK, hSRKPolicy);
     if (result != TSS_SUCCESS)
     {
@@ -56,6 +65,7 @@ int main(int argc, char** argv)
     printf("\n");
     Tspi_Context_CloseObject(hContext, hSRK);
     Tspi_Context_CloseObject(hContext, hSRKPolicy);
+    */
     ia_tpm_close(hContext, hTpm);
     return 0;
 }
