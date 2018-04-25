@@ -11,6 +11,7 @@
 
 #include <openssl/evp.h>
 
+
 int ia_tpm_init(TSS_HCONTEXT &hContext, TSS_HTPM &hTpm)
 {
     int result;
@@ -50,315 +51,6 @@ int ia_tpm_close(TSS_HCONTEXT &hContext, TSS_HTPM &hTpm)
     }
     return result;
 }
-
-int ia_tpm_seal(TSS_HCONTEXT &hContext, TSS_HKEY hKey, UINT32 inSize, BYTE *inData, UINT32 *outSize, BYTE *outData, TSS_HPCRS hPcrComposite)
-{
-    TSS_HPOLICY hPolicy;
-    TSS_HENCDATA hEncData;
-    UINT32 keySize, tpmOutSize;
-    BYTE *tpmOut = 0;
-    BYTE wellKnowSecret[] = TSS_WELL_KNOWN_SECRET;
-    int result;
-
-    //创建加密对象
-    result = Tspi_Context_CreateObject(
-        hContext,
-        TSS_OBJECT_TYPE_ENCDATA,
-        TSS_ENCDATA_SEAL,
-        &hEncData);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Creat EncData object", result);
-        return result;
-    }
-    //创建策略对象
-    result = Tspi_Context_CreateObject(
-        hContext,
-        TSS_OBJECT_TYPE_POLICY,
-        TSS_POLICY_USAGE,
-        &hPolicy);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Creat policy object", result);
-        return result;
-    }
-    //设置策略的秘密
-    result = Tspi_Policy_SetSecret(
-        hPolicy,
-        TSS_SECRET_MODE_SHA1,
-        sizeof(wellKnowSecret),
-        wellKnowSecret);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Set policy secret", result);
-        return result;
-    }
-    //将策略与对象绑定
-    result = Tspi_Policy_AssignToObject(
-        hPolicy,
-        hEncData);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Assign policy to object", result);
-        return result;
-    }
-    //获取密钥长度
-    result = Tspi_GetAttribUint32(
-        hKey,
-        TSS_TSPATTRIB_KEY_INFO,
-        TSS_TSPATTRIB_KEYINFO_SIZE,
-        &keySize);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Get key length", result);
-        return result;
-    }
-    if (inSize > keySize - 16)
-    {
-        LogBug("Data to be binded is too big", 0);
-        return result;
-    }
-    //获取加密数据块///////////////////////////////////////////////////////////////////////////////
-    result = Tspi_Data_Seal(hEncData, hKey, inSize, inData, hPcrComposite);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Seal data", result);
-        return result;
-    }
-    //获取加密数据
-    result = Tspi_GetAttribData(
-        hEncData,
-        TSS_TSPATTRIB_ENCDATA_BLOB,
-        TSS_TSPATTRIB_ENCDATABLOB_BLOB,
-        &tpmOutSize,
-        &tpmOut);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Get sealed data", result);
-        return result;
-    }
-    printf("%d\t%d\t%d\n", tpmOutSize, *outSize, inSize);
-    //输出
-    outData = (BYTE *)malloc(tpmOutSize);
-    memset(outData, 0, tpmOutSize);
-    memcpy(outData, tpmOut, tpmOutSize);
-    *outSize = tpmOutSize;
-    //清理现场
-    Tspi_Context_FreeMemory(hContext, tpmOut);
-    Tspi_Context_CloseObject(hContext, hEncData);
-
-    return result;
-}
-
-int ia_tpm_unseal(TSS_HCONTEXT &hContext, TSS_HKEY hKey, UINT32 inSize, BYTE *inData, UINT32 *outSize, BYTE *outData, TSS_HPCRS hPcrComposite)
-{
-    TSS_HENCDATA hEncData;
-    TSS_HCONTEXT hPolicy;
-    UINT32 keySize, tpmOutSize;
-    BYTE *tpmOut = NULL;
-    BYTE wellKnowSecret[] = TSS_WELL_KNOWN_SECRET;
-
-    int result;
-
-    //创建解密对象
-    result = Tspi_Context_CreateObject(
-        hContext,
-        TSS_OBJECT_TYPE_ENCDATA,
-        TSS_ENCDATA_SEAL,
-        &hEncData);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Creat EncData object", result);
-        return result;
-    }
-    //设置解密对象的数据
-    result = Tspi_SetAttribData(
-        hEncData,
-        TSS_TSPATTRIB_ENCDATA_BLOB,
-        TSS_TSPATTRIB_ENCDATABLOB_BLOB,
-        inSize,
-        inData);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Set EncData object data", result);
-        return result;
-    }
-    //创建策略对象
-    result = Tspi_Context_CreateObject(
-        hContext,
-        TSS_OBJECT_TYPE_POLICY,
-        TSS_POLICY_USAGE,
-        &hPolicy);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Creat policy object", result);
-        return result;
-    }
-    //设置策略的秘密
-    result = Tspi_Policy_SetSecret(
-        hPolicy,
-        TSS_SECRET_MODE_SHA1,
-        sizeof(wellKnowSecret),
-        wellKnowSecret);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Set policy secret", result);
-        return result;
-    }
-    //将策略与对象绑定
-    result = Tspi_Policy_AssignToObject(
-        hPolicy,
-        hEncData);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Assign policy to object", result);
-        return result;
-    }
-    //获取密钥长度
-    result = Tspi_GetAttribUint32(
-        hKey,
-        TSS_TSPATTRIB_KEY_INFO,
-        TSS_TSPATTRIB_KEYINFO_SIZE,
-        &keySize);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Get key length", result);
-        return result;
-    }
-    if (inSize > keySize - 16)
-    {
-        LogBug("Data to be unseal is too big", 0);
-        return result;
-    }
-    //解密数据块
-    result = Tspi_Data_Unseal(hEncData, hKey, &tpmOutSize, &tpmOut);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Unseal data", result);
-        return result;
-    }
-
-    printf("%d\t%d\t%d\n", tpmOutSize, *outSize, inSize);
-    //输出
-    free(outData);
-    outData = (BYTE *)malloc(tpmOutSize);
-    memset(outData, 0, tpmOutSize);
-    memcpy(outData, tpmOut, tpmOutSize);
-    *outSize = tpmOutSize;
-    //清理现场
-    Tspi_Context_FreeMemory(hContext, tpmOut);
-    Tspi_Context_CloseObject(hContext, hEncData);
-
-    return result;
-}
-
-int ia_tpm_get_srk(TSS_HCONTEXT &hContext, TSS_HKEY &hSRK, TSS_HPOLICY &hSRKPolicy)
-{
-    BYTE wellKnowSecret[] = TSS_WELL_KNOWN_SECRET;
-    int result;
-    //获取SRK
-    result = Tspi_Context_LoadKeyByUUID(
-        hContext,
-        TSS_PS_TYPE_SYSTEM,
-        TSS_UUID_SRK,
-        &hSRK);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Get SRK", result);
-        return result;
-    }
-    //获取SRK策略
-    result = Tspi_GetPolicyObject(
-        hSRK,
-        TSS_POLICY_USAGE,
-        &hSRKPolicy);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Get SRK policy", result);
-        return result;
-    }
-    //设置SRK策略
-    result = Tspi_Policy_SetSecret(
-        hSRKPolicy,
-        TSS_SECRET_MODE_SHA1,
-        sizeof(wellKnowSecret),
-        wellKnowSecret
-    );
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Set SRK policy", result);
-        return result;
-    }
-    return result;
-}
-
-/*
-int ia_tpm_creat_key(TSS_HCONTEXT hContext, TSS_FLAG initFlags, TSS_HKEY &hParentKey, TSS_HKEY &hKey)
-{
-    int result;
-    TSS_HPOLICY hPolicy;
-    TSS_UUID hKeyUUID;
-
-    //创建密钥对象
-    result = Tspi_Context_CreateObject(
-        hContext,
-        TSS_OBJECT_TYPE_RSAKEY,
-        initFlags,
-        &hKey
-    );
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Create object", result);
-        return result;
-    }
-    // //创建策略对象
-    // result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_POLICY,TSS_POLICY_USAGE, &hPolicy);
-    // if (result != TSS_SUCCESS) {
-    //     LogBug("Creat Key Policy Object", result);
-    //     Tspi_Context_CloseObject(hContext, hKey);
-    //     return result;
-    // }
-    
-    //设置密钥的填充方式
-    result = Tspi_SetAttribUint32(
-        hKey,
-        TSS_TSPATTRIB_KEY_INFO,
-        TSS_TSPATTRIB_KEYINFO_ENCSCHEME,
-        TSS_ES_RSAESPKCSV15
-    );
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Set key Attribute", result);
-        Tspi_Context_CloseObject(hContext, hKey);
-        return result;
-    }
-    //创建密钥
-    result = Tspi_Key_CreateKey(hKey, hParentKey, 0);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Create Key", result);
-        Tspi_Context_CloseObject(hContext, hKey);
-        return result;
-    }
-    //注册密钥
-    result = Tspi_Context_RegisterKey(
-        hContext,
-        hKey,
-        TSS_PS_TYPE_SYSTEM,
-        hKeyUUID,
-        TSS_PS_TYPE_SYSTEM,
-        TSS_UUID_SRK
-    );
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Register key", result);
-        Tspi_Context_CloseObject(hContext, hKey);
-        return result;
-    }
-
-    return result;
-}
-*/
 
 int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYTE* PlatformKey)
 {
@@ -551,4 +243,296 @@ int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYT
 		BIO_free(b64);
 
     return TSS_SUCCESS;
+}
+
+/*
+ * Reading PlatformKey from file which is encoded by base64.
+ */
+int ia_tpm_read_PK_file(BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UINT32 &sealedPKSize)
+{
+    int rc, rcLen=0, tssLen=0, pkLen=0;
+	BYTE* rcPtr;
+	char data[EVP_CIPHER_block_size(EVP_aes_256_cbc()) * 16];
+	struct stat stats;
+
+	BIO *bdata = NULL, *b64 = NULL, *bmem = NULL;
+	int bioRc = 0;
+    int tssKeyDataSize = 0;
+	int evpKeyDataSize = 0;
+
+	/* Test for file existence */
+	if ((rc = stat(IA_TPM_PLATFROM_KEY_PATH, &stats))) {
+		LogError("Cannot find PlatfromKey.enc file");
+        rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}	
+
+	/* Create an input file BIO */
+	if((bdata = BIO_new_file(IA_TPM_PLATFROM_KEY_PATH, "r")) == NULL ) {
+		LogError("Cannot open PlatfromKey.enc file");
+        rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}
+
+	/* Test file header for TSS */
+	BIO_gets(bdata, data, sizeof(data));
+	if (strncmp(data, TPMSEAL_HDR_STRING, 
+			strlen(TPMSEAL_HDR_STRING)) != 0) {
+		LogError("PlatfromKey.enc has been destoried");
+        rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}		
+
+	/* Looking for TSS Key Header */
+	BIO_gets(bdata, data, sizeof(data));
+	if (strncmp(data, TPMSEAL_TSS_STRING, 
+			strlen(TPMSEAL_TSS_STRING)) != 0) {
+		LogError("PlatfromKey.enc has been destoried");
+        rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}
+
+	/* Create a memory BIO to hold the base64 TSS key */
+	if ((bmem = BIO_new(BIO_s_mem())) == NULL) {
+		LogError("Creating a memory BIO failed");
+        rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}
+	BIO_set_mem_eof_return(bmem, 0);
+
+	/* Read the base64 TSS key into the memory BIO */
+	while ((rcLen = BIO_gets(bdata, data, sizeof(data))) > 0) {
+		/* Look for EVP Key Header (end of key) */
+		if (strncmp(data, TPMSEAL_EVP_STRING,
+				strlen(TPMSEAL_EVP_STRING)) == 0)
+			break;
+
+		if (BIO_write(bmem, data, rcLen) <= 0) {
+			LogError("Cannot write BIO memory when read TSS key from file");
+            rc = IA_TPM_NOT_TSS_ERROR;
+            goto out;
+		}
+	}
+	if (strncmp(data, TPMSEAL_EVP_STRING, 
+			strlen(TPMSEAL_EVP_STRING)) != 0 ) {
+        LogError("PlatfromKey.enc has been destoried");
+        rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}
+
+	/* Create a base64 BIO to decode the TSS key */
+	if ((b64 = BIO_new(BIO_f_base64())) == NULL) {
+        LogError("Create a base64 BIO failed before decode TSS key");
+		rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}
+
+	/* Decode the TSS key */
+	bmem = BIO_push( b64, bmem );
+	while ((rcLen = BIO_read(bmem, data, sizeof(data))) > 0) {
+		if ((tssLen + rcLen) > tssKeyDataSize) {
+			tssKeyDataSize += TSSKEY_DEFAULT_SIZE;
+			rcPtr = (BYTE*)realloc( sealKey, tssKeyDataSize);
+			if ( rcPtr == NULL ) {
+                LogError("Alloc memory failed when decode TSS key");
+				rc = IA_TPM_NOT_TSS_ERROR;
+                goto out;
+			}
+			sealKey = rcPtr;
+		}
+		memcpy(sealKey + tssLen, data, rcLen);
+		tssLen += rcLen;
+	}
+    sealKeySize = tssLen;
+	bmem = BIO_pop(b64);
+	BIO_free(b64);
+	b64 = NULL;
+	bioRc = BIO_reset(bmem);
+	if (bioRc != 1) {
+		LogError("Reset BIO memory failed");
+        rc = IA_TPM_NOT_TSS_ERROR;
+        goto out; 
+	}
+	/* Read the base64 Symmetric key into the memory BIO */
+	while ((rcLen = BIO_gets(bdata, data, sizeof(data))) > 0) {
+		/* Look for Encrypted Data Header (end of key) */
+		if (strncmp(data, TPMSEAL_FTR_STRING,
+				strlen(TPMSEAL_FTR_STRING)) == 0)
+			break;
+
+		if (BIO_write(bmem, data, rcLen) <= 0) {
+			LogError("Cannot write BIO memory when read PlatformKey from file");
+            rc = IA_TPM_NOT_TSS_ERROR;
+            goto out;
+		}
+	}
+
+	/* Create a base64 BIO to decode the PlatformKey */
+	if ((b64 = BIO_new(BIO_f_base64())) == NULL) {
+		LogError("Create a base64 BIO failed before decode PlatformKey");
+		rc = IA_TPM_NOT_TSS_ERROR;
+        goto out;
+	}
+
+	/* Decode the Symmetric key */
+	bmem = BIO_push( b64, bmem );
+	while ((rcLen = BIO_read(bmem, data, sizeof(data))) > 0) {
+        printf("rcLen%d\n",rcLen);
+		if ((pkLen + rcLen) > evpKeyDataSize) {
+			evpKeyDataSize += TSSKEY_DEFAULT_SIZE;
+			rcPtr = (BYTE*)realloc( sealedPK, evpKeyDataSize);
+			if ( rcPtr == NULL ) {
+				LogError("Alloc memory failed when decode PlatformKey");
+				rc = IA_TPM_NOT_TSS_ERROR;
+                goto out;
+			}
+			sealedPK = rcPtr;
+		}
+		memcpy(sealedPK + pkLen, data, rcLen);
+		pkLen += rcLen;
+	}
+    sealedPKSize = pkLen;
+
+    bmem = BIO_pop(b64);
+	BIO_free(b64);
+	b64 = NULL;
+	/* a BIO_reset failure shouldn't have an affect at this point */
+	bioRc = BIO_reset(bmem);
+	if (bioRc != 1) {
+        LogError("Clean up failed");
+		goto out;
+	}
+
+out:
+	if ( bdata )
+		BIO_free(bdata);
+	if ( b64 )
+		BIO_free(b64);
+	if ( bmem ) {
+		bioRc = BIO_set_close(bmem, BIO_CLOSE);
+		BIO_free(bmem);
+	}
+    return rc;
+}
+
+int ia_tpm_get_platform_key(TSS_HCONTEXT &hContext, UINT32 &PlatformKeySize, BYTE* &PlatformKey)
+{
+    TSS_HPOLICY     hPolicy, hSRKPolicy;
+    TSS_HKEY        hKey, hSRK;
+    TSS_HENCDATA    hEncData;
+
+    BYTE            wellKnow[] = TSS_WELL_KNOWN_SECRET;
+    BYTE*           sealKey = NULL;
+    UINT32          sealKeySize = 0;
+    BYTE*           sealedPK = NULL;
+    UINT32          sealedPKSize = 0;
+
+    int result;
+
+    //Read PlatformKey.enc file.
+    result = ia_tpm_read_PK_file(sealKey, sealKeySize, sealedPK, sealedPKSize);
+    if (result == IA_TPM_NOT_TSS_ERROR)
+    {
+        LogError("Read PlatformKey.enc file failed");
+        return result;
+    }
+
+    //Create EncData object for unseal PlatformKey.
+    result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_ENCDATA, TSS_ENCDATA_SEAL, &hEncData);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Create EncData object", result);
+        return result;
+    }
+
+    result = Tspi_SetAttribData(hEncData, TSS_TSPATTRIB_ENCDATA_BLOB, TSS_TSPATTRIB_ENCDATABLOB_BLOB, sealedPKSize, sealedPK);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Set EncData object data", result);
+        return result;
+    }
+
+    //Create EncData object's policy.
+    result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_POLICY, TSS_POLICY_USAGE, &hPolicy);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Create EncData object policy", result);
+        return result;
+    }
+
+    result = Tspi_Policy_SetSecret(hPolicy, TSS_SECRET_MODE_SHA1, sizeof(wellKnow), wellKnow);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Set EncData policy secret", result);
+        return result;
+    }
+
+    //Assign policy to object
+    result = Tspi_Policy_AssignToObject(hPolicy, hEncData);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Assign EncData policy to its object", result);
+        return result;
+    }
+
+    //Load SRK.
+    result = Tspi_Context_LoadKeyByUUID(hContext, TSS_PS_TYPE_SYSTEM, TSS_UUID_SRK, &hSRK);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Load SRK", result);
+        return result;
+    }
+
+    result = Tspi_GetPolicyObject(hSRK, TSS_POLICY_USAGE, &hSRKPolicy);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Get SRK policy", result);
+        return result;
+    }
+
+    result = Tspi_Policy_SetSecret(hPolicy, TSS_SECRET_MODE_SHA1, sizeof(wellKnow), wellKnow);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Set SRK policy secret", result);
+        return result;
+    }
+
+    //Load Key object of SealKey by SRK
+    result = Tspi_Context_LoadKeyByBlob(hContext, hSRK, sealKeySize, sealKey, &hKey);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Load SealKey object", result);
+        return result;
+    }
+
+    result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_POLICY, TSS_POLICY_USAGE, &hPolicy);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Create SealKey object policy", result);
+        return result;
+    }
+
+    result = Tspi_Policy_SetSecret(hPolicy, TSS_SECRET_MODE_SHA1, sizeof(wellKnow), wellKnow);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Set SealKey policy secret", result);
+        return result;
+    }
+
+    result = Tspi_Policy_AssignToObject(hPolicy, hKey);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Assign policy to SealKey object", result);
+        return result;
+    }
+
+    //Unseal PlatfromKey.
+    result = Tspi_Data_Unseal(hEncData, hKey, &PlatformKeySize, &PlatformKey);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("Unseal PlatformKey", result);
+        return result;
+    }
+
+    return result;
 }

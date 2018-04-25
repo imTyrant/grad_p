@@ -12,9 +12,9 @@ BYTE testData[] = "1234567";
 int main(int argc, char** argv)
 {
     TSS_HCONTEXT    hContext;
-    TSS_HTPM        hTpm; 
-    TSS_HKEY        hSRK;
-    TSS_HPOLICY     hSRKPolicy;
+    TSS_HTPM        hTpm;
+    BYTE*           PlatformKey;
+    UINT32          PlatformKeySize;
 
     int result;
     result = ia_tpm_init(hContext, hTpm);
@@ -23,49 +23,19 @@ int main(int argc, char** argv)
         LogBug("[Main]tpm init",result);
         return -1;
     }
-    result = ia_tpm_seal_platform_key(hContext, 7, testData);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("[Main]tpm seal platform key", result);
-        return -1;
-    }
-    /*
-    result = ia_tpm_get_srk(hContext, hSRK, hSRKPolicy);
-    if (result != TSS_SUCCESS)
-    {
-        LogBug("Get SRK",result);
-        return -1;
-    }
 
-    UINT32 inSize;
-    UINT32 outSize;
-    BYTE *outData;
-    inSize = 12;
-    outData = (BYTE*)malloc(inSize);
-    memset(outData, 0, 12);
-
-    result = ia_tpm_seal(hContext, hSRK, inSize, source, &outSize, outData, 0);
+    result = ia_tpm_get_platform_key(hContext, PlatformKeySize, PlatformKey);
     if (result != TSS_SUCCESS)
     {
-        LogBug("[Main]Seal data",result);
+        LogBug("[Main]tpm unseal platform key", result);
         return -1;
     }
-    printf("%d\n", outSize);
-
-    result = ia_tpm_unseal(hContext, hSRK, outSize, outData, &outSize, outData, 0);
-    if (result != TSS_SUCCESS)
+    printf("%d\n", PlatformKeySize);
+    for(int i = 0; i < PlatformKeySize; i++)
     {
-        LogBug("[Main]Unseal data",result);
-        return -1;
+        printf("%c", PlatformKey[i]);
     }
-    for(int i =0; i < outSize; i++)
-    {
-        printf("%02x",outData[i]);
-    }
-    printf("\n");
-    Tspi_Context_CloseObject(hContext, hSRK);
-    Tspi_Context_CloseObject(hContext, hSRKPolicy);
-    */
+    
     ia_tpm_close(hContext, hTpm);
     return 0;
 }

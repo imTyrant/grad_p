@@ -17,6 +17,8 @@
 #define TPMSEAL_TSS_STRING              "-----SEAL KEY-----\n"
 #define TPMSEAL_EVP_STRING              "-----PLATFROM KEY-----\n"
 
+#define TSSKEY_DEFAULT_SIZE             768
+#define SYSKEY_DEFAULT_SIZE             365
 //变量
 
 //函数
@@ -35,47 +37,20 @@ int ia_tpm_close(
     TSS_HTPM        &hTpm
 );
 /* 
- * Bind
+ * 封装PlatformKey到本地
  */
-int ia_tpm_seal(
-    TSS_HCONTEXT    &hContext,
-    TSS_HKEY        hKey,
-    UINT32          inSize,
-    BYTE            *inData,
-    UINT32          *outSize,
-    BYTE            *outData,
-    TSS_HPCRS       hPcrComposite
-);
-
-int ia_tpm_unseal(
-    TSS_HCONTEXT    &hContext,
-    TSS_HKEY        hKey,
-    UINT32          inSize,
-    BYTE            *inData,
-    UINT32          *outSize,
-    BYTE            *outData,
-    TSS_HPCRS       hPcrComposite
-);
-
-
-int ia_tpm_get_srk(
-    TSS_HCONTEXT    &hContext,
-    TSS_HKEY        &hSRK,
-    TSS_HPOLICY     &hSRKPolicy
-);
-
-int ia_tpm_creat_key(
-    TSS_HCONTEXT    hContext,
-    TSS_FLAG        initFlags,
-    TSS_HKEY        &hParentKey,
-    TSS_HKEY        &hKey
-);
-
 int ia_tpm_seal_platform_key(
     TSS_HCONTEXT    &hContext,
     UINT32          PlatformKeySize,
     BYTE            *PlatformKey
 );
-
+/*
+ * 从本地读取PlatformKey
+ */
+int ia_tpm_get_platform_key(
+    TSS_HCONTEXT    &hContext,
+    UINT32          &PlatformKeySize,
+    BYTE*           &PlatformKey
+);
 
 #endif
