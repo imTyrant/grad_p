@@ -2,6 +2,7 @@
 PROJECT(grad_p)
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6) 
 ADD_SUBDIRECTORY(ia_tpm)
+ADD_SUBDIRECTORY(info_gether)
 AUX_SOURCE_DIRECTORY(. DIR_SRCS)
 ADD_EXECUTABLE(grad_p ${DIR_SRCS}  )
-TARGET_LINK_LIBRARIES( grad_p IA_TPM libtspi.so libz.so libssl.so libcrypto.so)
+TARGET_LINK_LIBRARIES( grad_p IA_TPM INFO_GETHER libtspi.so libz.so libssl.so libcrypto.so)
