@@ -54,6 +54,11 @@ int ia_tpm_close(TSS_HCONTEXT &hContext, TSS_HTPM &hTpm)
 
 int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYTE* PlatformKey)
 {
+    return ia_tpm_seal_key(hContext, PLATFORM_KEY_ENC_PATH, PlatformKeySize, PlatformKey);
+}
+
+int ia_tpm_seal_key(TSS_HCONTEXT &hContext, const char* SealedKeyPath, UINT32 KeySize, BYTE* Key)
+{
     TSS_HPOLICY     hPolicy, hSRKPolicy;
     TSS_HKEY        hKey, hSRK;
     TSS_HENCDATA    hEncData;
@@ -94,7 +99,7 @@ int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYT
         return result;
     }
 
-    //Create SealKey which will be used to seal PlatformKey.
+    //Create SealKey which will be used to seal Key.
     result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_RSAKEY, keyFlags, &hKey);
     if (result != TSS_SUCCESS)
     {
@@ -168,26 +173,26 @@ int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYT
         return result;
     }
 
-    //Seal PlatformKey.
-    result = Tspi_Data_Seal(hEncData, hKey, PlatformKeySize, PlatformKey, 0);
+    //Seal Key.
+    result = Tspi_Data_Seal(hEncData, hKey, KeySize, Key, 0);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Seal PlatfromKey", result);
+        LogBug("Seal Key", result);
         return result;
     }
 
-    //Get sealed PlatformKey and sealing key.
+    //Get sealed Key and sealing key.
     result = Tspi_GetAttribData(hEncData, TSS_TSPATTRIB_ENCDATA_BLOB, TSS_TSPATTRIB_ENCDATABLOB_BLOB, &sealedPKSize, &sealedPK);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Get Sealed PlatfromKey", result);
+        LogBug("Get sealed Key data", result);
         return result;
     }
 
     result = Tspi_GetAttribData(hKey, TSS_TSPATTRIB_KEY_BLOB, TSS_TSPATTRIB_KEYBLOB_BLOB, &sealKeSize, &sealKey);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Get seal key", result);
+        LogBug("Get seal key data", result);
         return result;
     }
 
@@ -205,10 +210,10 @@ int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYT
 	}
 
 	/* Assign the output file to the BIO */
-	if (strlen(IA_TPM_PLATFROM_KEY_PATH) == 0)
+	if (strlen(SealedKeyPath) == 0)
 		BIO_set_fp(bdata, stdout, BIO_NOCLOSE);
-	else if (BIO_write_filename(bdata, (void *)IA_TPM_PLATFROM_KEY_PATH) <= 0) {
-		LogBug("Unable to open output file ./PlatformKey.enc", IA_TPM_NOT_TSS_ERROR);
+	else if (BIO_write_filename(bdata, (void *)SealedKeyPath) <= 0) {
+		LogBug("Unable to open output file.", IA_TPM_NOT_TSS_ERROR);
 		return IA_TPM_NOT_TSS_ERROR;
 	}
 
@@ -225,7 +230,7 @@ int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYT
 	}
 	bdata = BIO_pop(b64);
 
-	/* Sealed PlatformKey */
+	/* Sealed Key */
 	BIO_puts(bdata, TPMSEAL_EVP_STRING);
 	bdata = BIO_push(b64, bdata);
 	BIO_write(bdata, sealedPK, sealedPKSize);
@@ -248,7 +253,7 @@ int ia_tpm_seal_platform_key(TSS_HCONTEXT &hContext, UINT32 PlatformKeySize, BYT
 /*
  * Reading PlatformKey from file which is encoded by base64.
  */
-int ia_tpm_read_PK_file(BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UINT32 &sealedPKSize)
+int ia_tpm_read_key_file(const char* KeyPath, BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UINT32 &sealedPKSize)
 {
     int rc, rcLen=0, tssLen=0, pkLen=0;
 	BYTE* rcPtr;
@@ -261,15 +266,15 @@ int ia_tpm_read_PK_file(BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UI
 	int evpKeyDataSize = 0;
 
 	/* Test for file existence */
-	if ((rc = stat(IA_TPM_PLATFROM_KEY_PATH, &stats))) {
-		LogError("Cannot find PlatfromKey.enc file");
+	if ((rc = stat(KeyPath, &stats))) {
+		LogError("Cannot find Key file");
         rc = IA_TPM_NOT_TSS_ERROR;
         goto out;
 	}	
 
 	/* Create an input file BIO */
-	if((bdata = BIO_new_file(IA_TPM_PLATFROM_KEY_PATH, "r")) == NULL ) {
-		LogError("Cannot open PlatfromKey.enc file");
+	if((bdata = BIO_new_file(KeyPath, "r")) == NULL ) {
+		LogError("Cannot open Key file");
         rc = IA_TPM_NOT_TSS_ERROR;
         goto out;
 	}
@@ -278,7 +283,7 @@ int ia_tpm_read_PK_file(BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UI
 	BIO_gets(bdata, data, sizeof(data));
 	if (strncmp(data, TPMSEAL_HDR_STRING, 
 			strlen(TPMSEAL_HDR_STRING)) != 0) {
-		LogError("PlatfromKey.enc has been destoried");
+		LogError("Key file has been destoried");
         rc = IA_TPM_NOT_TSS_ERROR;
         goto out;
 	}		
@@ -287,7 +292,7 @@ int ia_tpm_read_PK_file(BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UI
 	BIO_gets(bdata, data, sizeof(data));
 	if (strncmp(data, TPMSEAL_TSS_STRING, 
 			strlen(TPMSEAL_TSS_STRING)) != 0) {
-		LogError("PlatfromKey.enc has been destoried");
+		LogError("Key file has been destoried");
         rc = IA_TPM_NOT_TSS_ERROR;
         goto out;
 	}
@@ -315,7 +320,7 @@ int ia_tpm_read_PK_file(BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UI
 	}
 	if (strncmp(data, TPMSEAL_EVP_STRING, 
 			strlen(TPMSEAL_EVP_STRING)) != 0 ) {
-        LogError("PlatfromKey.enc has been destoried");
+        LogError("Key file has been destoried");
         rc = IA_TPM_NOT_TSS_ERROR;
         goto out;
 	}
@@ -377,7 +382,6 @@ int ia_tpm_read_PK_file(BYTE* &sealKey, UINT32 &sealKeySize, BYTE* &sealedPK, UI
 	/* Decode the Symmetric key */
 	bmem = BIO_push( b64, bmem );
 	while ((rcLen = BIO_read(bmem, data, sizeof(data))) > 0) {
-        printf("rcLen%d\n",rcLen);
 		if ((pkLen + rcLen) > evpKeyDataSize) {
 			evpKeyDataSize += TSSKEY_DEFAULT_SIZE;
 			rcPtr = (BYTE*)realloc( sealedPK, evpKeyDataSize);
@@ -417,6 +421,11 @@ out:
 
 int ia_tpm_get_platform_key(TSS_HCONTEXT &hContext, UINT32 &PlatformKeySize, BYTE* &PlatformKey)
 {
+    return ia_tpm_get_key(hContext, PLATFORM_KEY_ENC_PATH, PlatformKeySize, PlatformKey);
+}
+
+int ia_tpm_get_key(TSS_HCONTEXT &hContext, const char* keyPath, UINT32 &KeySize, BYTE* &Key)
+{
     TSS_HPOLICY     hPolicy, hSRKPolicy;
     TSS_HKEY        hKey, hSRK;
     TSS_HENCDATA    hEncData;
@@ -429,15 +438,15 @@ int ia_tpm_get_platform_key(TSS_HCONTEXT &hContext, UINT32 &PlatformKeySize, BYT
 
     int result;
 
-    //Read PlatformKey.enc file.
-    result = ia_tpm_read_PK_file(sealKey, sealKeySize, sealedPK, sealedPKSize);
+    //Read Key file.
+    result = ia_tpm_read_key_file(keyPath, sealKey, sealKeySize, sealedPK, sealedPKSize);
     if (result == IA_TPM_NOT_TSS_ERROR)
     {
-        LogError("Read PlatformKey.enc file failed");
+        LogError("Read Key file failed");
         return result;
     }
 
-    //Create EncData object for unseal PlatformKey.
+    //Create EncData object for unseal Key.
     result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_ENCDATA, TSS_ENCDATA_SEAL, &hEncData);
     if (result != TSS_SUCCESS)
     {
@@ -497,40 +506,40 @@ int ia_tpm_get_platform_key(TSS_HCONTEXT &hContext, UINT32 &PlatformKeySize, BYT
         return result;
     }
 
-    //Load Key object of SealKey by SRK
+    //Load Key object of sealKey by SRK
     result = Tspi_Context_LoadKeyByBlob(hContext, hSRK, sealKeySize, sealKey, &hKey);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Load SealKey object", result);
+        LogBug("Load sealKey object", result);
         return result;
     }
 
     result = Tspi_Context_CreateObject(hContext, TSS_OBJECT_TYPE_POLICY, TSS_POLICY_USAGE, &hPolicy);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Create SealKey object policy", result);
+        LogBug("Create sealKey object policy", result);
         return result;
     }
 
     result = Tspi_Policy_SetSecret(hPolicy, TSS_SECRET_MODE_SHA1, sizeof(wellKnow), wellKnow);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Set SealKey policy secret", result);
+        LogBug("Set sealKey policy secret", result);
         return result;
     }
 
     result = Tspi_Policy_AssignToObject(hPolicy, hKey);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Assign policy to SealKey object", result);
+        LogBug("Assign policy to sealKey object", result);
         return result;
     }
 
-    //Unseal PlatfromKey.
-    result = Tspi_Data_Unseal(hEncData, hKey, &PlatformKeySize, &PlatformKey);
+    //Unseal Key.
+    result = Tspi_Data_Unseal(hEncData, hKey, &KeySize, &Key);
     if (result != TSS_SUCCESS)
     {
-        LogBug("Unseal PlatformKey", result);
+        LogBug("Unseal lKey", result);
         return result;
     }
 

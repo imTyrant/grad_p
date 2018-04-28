@@ -1,36 +1,136 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "include/global.h"
 #include "ia_tpm/ia_tpm.h"
 #include "info_gether/info_gether.h"
+#include "aik_init/aik_init.h"
 
-BYTE source[12] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c};
+#include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/sha.h>
 
-BYTE testData[] = "1234567";
+RSA* get_ca_pub_key();
+int repo_ST(UINT32 &repoSize, BYTE* &repo);
+int repo_T(UINT32 &repoSize, BYTE* &repo);
+
+int report_form(UINT32 &gramSize, BYTE* &gram, UINT32 repoSize, BYTE* repo);
+
+int currLevel = T;
+
+BYTE testData[] = "1234567abcdef";
 
 int main(int argc, char** argv)
-{
-    // NET_INFO*  netInfo[MAX_NET_PORT_NUM];
-    // int portNum;
-    // info_gether_net(netInfo, portNum);
-    // for(int i =0; i < portNum; i++)
-    // {
-    //     printf("%s %s %s\n", netInfo[i]->loacl, netInfo[i]->remote, netInfo[i]->status);
-    //     free(netInfo[i]);
-    // }
-    float a;
-    info_gether_disk(a);
-    printf("%f\%\n", a);
-    return 0;
-    // TSS_HCONTEXT    hContext;
-    // TSS_HTPM        hTpm;
-    // BYTE*           PlatformKey;
-    // UINT32          PlatformKeySize;
+{   
+    TSS_HCONTEXT    hContext;
+    TSS_HTPM        hTpm;
 
-    // int result;
-    // result = ia_tpm_init(hContext, hTpm);
+    BYTE*           PlatformKey;
+    UINT32          PlatformKeySize;
+
+    struct stat     stats;
+    int             result;
+
+    result = ia_tpm_init(hContext, hTpm);
+    if (result != TSS_SUCCESS)
+    {
+        LogBug("[Main]TPM init",result);
+        return -1;
+    }
+
+    if ((result = stat(CA_PUB_KEY_SOUCRE_PATH, &stats)))
+    {
+        LogError("[Main]Can't find CA pub key.");
+        goto error_out;
+    }
+
+    if ((result = stat(PLATFORM_KEY_ENC_PATH, &stats)))
+    {
+        if ((result = stat(PLATFORM_KEY_SOUCRCE_PATH, &stats)))
+        {
+            LogError("[Main]Cannot find encrypted PlatformKey or raw PlatformKey");
+            goto error_out;
+        }
+
+        FILE*   fp = fopen(PLATFORM_KEY_SOUCRCE_PATH, "rb");
+        BYTE    buffer[256];
+        UINT32  getSize;
+        getSize = fread((char*)buffer, sizeof(BYTE), sizeof(buffer), fp);
+        if (getSize != PLATFROM_KEY_LEN)
+        {
+            LogError("[Main]Invalid PlatformKey file.")
+            goto error_out;
+        }
+
+        result = ia_tpm_seal_platform_key(hContext, getSize, buffer);
+        if (result != TSS_SUCCESS)
+        {
+            LogBug("[Main]Seal PlatformKey to local.",result);
+            goto error_out;
+        }
+    }
+
+    BYTE*   repo;
+    UINT32  repoSize;
+
+    // if((result = stat(TRUST_CERTIFICATE_PATH, &stats)))
+    // {
+    //     if (INFO_GETHER_SUCCESS != repo_T(repoSize, repo))
+    //     {
+    //         LogError("[Main]Gether info failed");
+    //         goto error_out;
+    //     }
+        
+    //     //Attestation
+    // }
+
+    
+
+    while(1)
+    {
+        
+        switch(currLevel)
+        {
+            case ST:
+                if (INFO_GETHER_SUCCESS != repo_ST(repoSize, repo))
+                {
+                    LogError("[Main]Gether info failed");
+                    goto error_out;
+                }
+                break;
+            case T:
+                if (INFO_GETHER_SUCCESS != repo_T(repoSize, repo))
+                {
+                    LogError("[Main]Gether info failed");
+                    goto error_out;
+                }
+                break;
+            case D:
+                break;
+            case UT:
+                break;
+            default:
+                LogError("[Main]Error! Unknown status level.")
+                break;
+        }
+
+        BYTE*   gram;
+        UINT32  gramSize;
+        report_form(gramSize, gram, repoSize, repo);
+        FILE* fp = fopen("./report","wb");
+        fwrite(gram, sizeof(BYTE), gramSize, fp);
+        fclose(fp);
+        break;
+        //Form report
+
+        //Attestation
+    }
+
+    // result = ia_tpm_seal_platform_key(hContext, sizeof(testData), testData);
     // if (result != TSS_SUCCESS)
     // {
     //     LogBug("[Main]tpm init",result);
@@ -48,7 +148,130 @@ int main(int argc, char** argv)
     // {
     //     printf("%c", PlatformKey[i]);
     // }
+    // printf("\n");
+out:
+    ia_tpm_close(hContext, hTpm);
+    return 0;
+
+error_out:
+    ia_tpm_close(hContext, hTpm);
+    return -1;
+}
+
+int report_form(UINT32 &gramSize, BYTE* &gram, UINT32 repoSize, BYTE* repo)
+{
+    BYTE           Hash[HASH_SECHEME_SHA1];
+    REPO_GRAM_HEAD  gramHead;
+    SHA_CTX         s;
+
+    gram = (BYTE*)malloc(repoSize + sizeof(REPO_GRAM_HEAD) + 20);
+
+    SHA1_Init(&s);
+    SHA1_Update(&s, repo, repoSize);
+    SHA1_Final(Hash, &s);
+
+    gramHead.head = 0x0;
+    gramHead.dataLength = repoSize;
+
+    memcpy(gram, &gramHead, sizeof(gramHead));
+    memcpy(gram + sizeof(gramHead), repo, repoSize);
+    memcpy(gram + sizeof(gramHead) + repoSize, Hash, HASH_SECHEME_SHA1);
+
+    gramSize = sizeof(gramHead) + repoSize + HASH_SECHEME_SHA1;
+
+    return 0;
+}
+
+void openssl_print_errors()
+{
+    ERR_load_ERR_strings();
+    ERR_load_crypto_strings();
+    ERR_print_errors_fp(stderr);
+}
+
+RSA* get_ca_pub_key()
+{
+    BIO*    b = NULL;
+    RSA*    rsa = NULL;
+
+    b = BIO_new_file(CA_PUB_KEY_SOUCRE_PATH, "r");
+    if (b == NULL) 
+    {
+        fprintf(stderr, "Error opening file for read: %s\n", CA_PUB_KEY_SOUCRE_PATH);
+        return NULL;
+    }
+
+    if ((rsa = PEM_read_bio_RSA_PUBKEY(b, NULL, 0, NULL)) == NULL) {
+        fprintf(stderr, "Reading key %s from disk failed.\n", CA_PUB_KEY_SOUCRE_PATH);
+        openssl_print_errors();
+    }
+    BIO_free(b);
+
+    return rsa;
+}
+
+int repo_ST(UINT32 &repoSize, BYTE* &repo)
+{
+    SYS_INFO    sysInfo;
+    repoSize = sizeof(SYS_INFO);
+    if (INFO_GETHER_SUCCESS != info_gether_sys(sysInfo))
+    {
+        return INFO_GETHER_E_ERROR_OCCURE;
+    }
+    repo = (BYTE*)malloc(repoSize);
+    memcpy(repo, &sysInfo, repoSize);
+    return INFO_GETHER_SUCCESS;
+}
+
+int repo_T(UINT32 &repoSize, BYTE* &repo)
+{
+    SYS_INFO    sysInfo;
+    NET_INFO*   netInfo[MAX_NET_PORT_NUM];
+
+    float       cpuUsage, memUsage, diskUsage;
+    int         portNum;
+
+    if (INFO_GETHER_SUCCESS != info_gether_sys(sysInfo))
+    {
+        return INFO_GETHER_E_ERROR_OCCURE;
+    }
+    if (INFO_GETHER_SUCCESS != info_gether_cpu(cpuUsage))
+    {
+        return INFO_GETHER_E_ERROR_OCCURE;
+    }
+    if (INFO_GETHER_SUCCESS != info_gether_mem(memUsage))
+    {
+        return INFO_GETHER_E_ERROR_OCCURE;
+    }
+    if (INFO_GETHER_SUCCESS != info_gether_disk(diskUsage))
+    {
+        return INFO_GETHER_E_ERROR_OCCURE;
+    }
+    if (INFO_GETHER_SUCCESS != info_gether_net(netInfo, portNum))
+    {
+        return INFO_GETHER_E_ERROR_OCCURE;
+    }
+
+    repoSize = sizeof(SYS_INFO) + sizeof(cpuUsage) + sizeof(cpuUsage) + 
+                    sizeof(cpuUsage) + sizeof(portNum) + portNum * sizeof(NET_INFO);
+    repo = (BYTE*)malloc(repoSize);
     
-    // ia_tpm_close(hContext, hTpm);
-    // return 0;
+    BYTE*   ir = repo;
+    memcpy(ir, &sysInfo, sizeof(sysInfo));
+    ir += sizeof(sysInfo);
+    memcpy(ir, &cpuUsage, sizeof(cpuUsage));
+    ir += sizeof(cpuUsage);
+    memcpy(ir, &memUsage, sizeof(memUsage));
+    ir += sizeof(memUsage);
+    memcpy(ir, &diskUsage, sizeof(diskUsage));
+    ir += sizeof(diskUsage);
+    memcpy(ir, &portNum, sizeof(portNum));
+    ir += sizeof(portNum);
+    for (int i = 0; i < portNum; i++)
+    {
+        memcpy(ir, netInfo[i], sizeof(NET_INFO));
+        ir += sizeof(NET_INFO);
+    }
+    
+    return INFO_GETHER_SUCCESS;
 }

@@ -36,6 +36,15 @@ int ia_tpm_close(
     TSS_HCONTEXT    &hContext,
     TSS_HTPM        &hTpm
 );
+/*
+ * 封装密钥
+ */
+int ia_tpm_seal_key(
+    TSS_HCONTEXT    &hContext,
+    const char*     SealedKeyPath,
+    UINT32          KeySize,
+    BYTE*           Key
+);
 /* 
  * 封装PlatformKey到本地
  */
@@ -43,6 +52,15 @@ int ia_tpm_seal_platform_key(
     TSS_HCONTEXT    &hContext,
     UINT32          PlatformKeySize,
     BYTE            *PlatformKey
+);
+/*
+ * 从本地读取已经封装好的密钥
+ */
+int ia_tpm_get_key(
+    TSS_HCONTEXT    &hContext,
+    const char*     keyPath,
+    UINT32          &KeySize,
+    BYTE*           &Key
 );
 /*
  * 从本地读取PlatformKey
