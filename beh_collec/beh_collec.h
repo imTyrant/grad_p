@@ -1,4 +1,0 @@
-#ifndef GRAD_PROJECT_BEH_COLLEC_H
-#define GRAD_PROJECT_BEH_COLLEC_H
-
-#endif
