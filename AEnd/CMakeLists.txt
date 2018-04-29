@@ -1,0 +1,9 @@
+#/CMakeLists.txt
+PROJECT(grad_p)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.6) 
+ADD_SUBDIRECTORY(ia_tpm)
+ADD_SUBDIRECTORY(info_gether)
+ADD_SUBDIRECTORY(aik_init)
+AUX_SOURCE_DIRECTORY(. DIR_SRCS)
+ADD_EXECUTABLE(grad_p ${DIR_SRCS}  )
+TARGET_LINK_LIBRARIES( grad_p IA_TPM INFO_GETHER AIK_INIT libtspi.so libz.so libssl.so libcrypto.so)
