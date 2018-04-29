@@ -1,0 +1,2 @@
+/usr/bin/ar qc libINFO_GETHER.a  CMakeFiles/INFO_GETHER.dir/info_gether.cc.o
+/usr/bin/ranlib libINFO_GETHER.a

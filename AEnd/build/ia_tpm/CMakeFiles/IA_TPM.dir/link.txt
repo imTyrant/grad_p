@@ -1,0 +1,2 @@
+/usr/bin/ar qc libIA_TPM.a  CMakeFiles/IA_TPM.dir/ia_tpm.cc.o
+/usr/bin/ranlib libIA_TPM.a

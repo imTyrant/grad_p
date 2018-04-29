@@ -1,0 +1,1 @@
+/usr/bin/c++      CMakeFiles/grad_p.dir/main.cc.o  -o grad_p -rdynamic ia_tpm/libIA_TPM.a info_gether/libINFO_GETHER.a aik_init/libAIK_INIT.a -ltspi -lz -lssl -lcrypto 

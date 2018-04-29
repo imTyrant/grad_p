@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/imt/grad_p/workspace/project/include/global.h
+
+/home/imt/grad_p/workspace/project/info_gether/info_gether.cc
+../include/global.h
+/home/imt/grad_p/workspace/project/include/global.h
+info_gether.h
+/home/imt/grad_p/workspace/project/info_gether/info_gether.h
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+unistd.h
+-
+sys/statfs.h
+-
+
+/home/imt/grad_p/workspace/project/info_gether/info_gether.h
+

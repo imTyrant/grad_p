@@ -1,0 +1,2 @@
+/usr/bin/ar qc libAIK_INIT.a  CMakeFiles/AIK_INIT.dir/aik_init.cc.o
+/usr/bin/ranlib libAIK_INIT.a

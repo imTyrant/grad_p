@@ -1,0 +1,3 @@
+file(REMOVE_RECURSE
+  "libINFO_GETHER.a"
+)
